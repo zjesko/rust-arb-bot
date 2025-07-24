@@ -1,0 +1,14 @@
+# enpoints
+rpc_url = "https://rpc.hyperliquid.xyz/evm"
+bybit_ws_endpoint = "wss://stream.bybit.com/v5/public/spot"
+
+# contracts
+self_addr = "0x1234567890123456789012345678901234567890"
+weth_addr = "0x5555555555555555555555555555555555555555"
+usdt_addr = "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
+quoter_v2_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
+quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
+
+# ticker
+bybit_ticker = "HYPEUSDT"
+
