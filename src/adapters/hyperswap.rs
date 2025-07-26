@@ -8,16 +8,17 @@ use alloy::{
     rpc::types::TransactionRequest,
     sol,
     sol_types::{SolCall, SolValue},
+    uint
 };
 use anyhow::Result;
 use log::{error, info};
 use tokio::time::{sleep, Instant};
 use tokio::sync::watch;
 
-use crate::helpers::{ONE_ETHER};
 use crate::settings;
 use crate::arbitrage::{PriceData};
 
+pub static ONE_ETHER: U256 = uint!(1_000_000_000_000_000_000_U256);
 
 sol! {
     struct QuoteExactInputSingleParams {

@@ -124,6 +124,7 @@ impl ArbEngine {
         let net_profit_bps = gross_profit_bps - total_fees_bps - gas_cost_bps;
 
         if net_profit_bps <= 0.0 {
+            info!("No arbitrage opportunity: net profit {:.2}bps (buy: ${:.4}, sell: ${:.4})", net_profit_bps, buy_price, sell_price);
             return Ok(None);
         }
 

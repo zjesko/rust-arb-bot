@@ -16,5 +16,5 @@ bybit_fee_bps = 10
 hyperswap_fee_bps = 10
 hyperswap_max_slippage_bps = 10
 
-gas_used = 200000
+gas_used = 100000
 

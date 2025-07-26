@@ -1,6 +1,5 @@
 mod adapters;
 mod arbitrage;
-mod helpers;
 mod settings;
 
 use anyhow::Result;
