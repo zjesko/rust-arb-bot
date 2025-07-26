@@ -9,7 +9,7 @@ use tokio::sync::watch;
 
 use crate::adapters::bybit::run_bybit_listener;
 use crate::adapters::hyperswap::run_hyperswap_listener;
-use crate::arbitrage::PriceData;
+use crate::arbitrage::{PriceData, ArbEngine};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,15 +19,28 @@ async fn main() -> Result<()> {
 
     println!("{:#?}", cfg);
 
-    let (bybit_tx, _bybit_rx) = watch::channel::<Option<PriceData>>(None);
+    let (bybit_tx, bybit_rx) = watch::channel::<Option<PriceData>>(None);
     let (hyperswap_tx, hyperswap_rx) = watch::channel::<Option<PriceData>>(None);
 
-    // inititate bybit websocket
     info!("initializing bybit rpc ws connection...");
     let bybit_task = tokio::spawn(run_bybit_listener(bybit_tx));
 
     info!("initializing hyperswap price fetcher...");
     let dex_task = tokio::spawn(run_hyperswap_listener(hyperswap_tx));
+
+    info!("initializing arbitrage detection engine...");
+
+    let mut arbitrage_engine = ArbEngine::new(
+        cfg.clone(),
+        bybit_rx,
+        hyperswap_rx,
+    );
+
+    let arbitrage_task = tokio::spawn(async move {
+        if let Err(e) = arbitrage_engine.run().await {
+            error!("arbitrage engine error: {}", e);
+        }
+    });
 
 
     tokio::select! {
@@ -39,6 +52,11 @@ async fn main() -> Result<()> {
         result = dex_task => {
             if let Err(e) = result {
                 error!("dex price fetcher task failed: {}", e);
+            }
+        }
+        result = arbitrage_task => {
+            if let Err(e) = result {
+                error!("arbitrage engine task failed: {}", e);
             }
         }
     }

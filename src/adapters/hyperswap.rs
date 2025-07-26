@@ -97,7 +97,7 @@ pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Res
         }
         
         // Fetch DEX prices every 1 seconds
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(200)).await;
     }
 }
 

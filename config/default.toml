@@ -12,3 +12,8 @@ quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
 # ticker
 bybit_ticker = "HYPEUSDT"
 
+bybit_fee_bps = 10
+hyperswap_fee_bps = 10
+
+hyperswap_max_slippage_bps = 10
+

@@ -12,6 +12,8 @@ pub struct Settings {
     pub quoter_custom_addr: String,
 
     pub bybit_ticker: String,
+    pub bybit_fee_bps: u32,
+    pub hyperswap_fee_bps: u32,
 
     // from env
     pub rpc_url: String,
