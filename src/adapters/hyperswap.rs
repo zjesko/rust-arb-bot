@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use alloy::{
     network::TransactionBuilder,
@@ -9,10 +10,13 @@ use alloy::{
     sol_types::{SolCall, SolValue},
 };
 use anyhow::Result;
-use log::info;
+use log::{error, info};
+use tokio::time::sleep;
+use tokio::sync::watch;
 
 use crate::helpers::{measure_end, measure_start, ONE_ETHER};
 use crate::settings;
+use crate::arbitrage::{PriceData, current_timestamp};
 
 
 sol! {
@@ -79,24 +83,66 @@ pub fn build_tx(to: Address, from: Address, calldata: Bytes, base_fee: u128) -> 
         .into()
 }
 
-pub async fn get_quote() -> Result<()> {
-    let cfg = settings::Settings::load()?;
-    
+
+pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Result<()> {
+    let cfg: settings::Settings = settings::Settings::load()?;
+
     let provider = ProviderBuilder::new().connect_http(cfg.rpc_url.parse()?);
     let provider = Arc::new(provider);
 
+    loop {
+        match fetch_quote(&tx, &provider, &cfg).await {
+            Ok(_) => {},
+            Err(e) => error!("DEX price fetch error: {}", e),
+        }
+        
+        // Fetch DEX prices every 1 seconds
+        sleep(Duration::from_secs(1)).await;
+    }
+}
+
+async fn fetch_quote(
+    price_tx: &watch::Sender<Option<PriceData>>, 
+    provider: &Arc<impl Provider>, 
+    cfg: &settings::Settings
+) -> Result<()> {
     let base_fee = provider.get_gas_price().await?;
+    // Use constant 1.0 ETH trade size for consistency with arbitrage engine
     let volume = ONE_ETHER;
-    let calldata = quote_calldata(cfg.weth_addr.parse()?, cfg.usdt_addr.parse()?, volume, 3000);
-
-    let tx = build_tx(cfg.quoter_v2_addr.parse()?, cfg.self_addr.parse()?, calldata, base_fee);
-    let start = measure_start("eth_call_one");
-    let call = provider.call(tx).await?;
-
-    let amount_out = decode_quote_response(call)?;
-    info!("HyperSwap {} WETH -> USDT {}", volume, amount_out);
-
-    measure_end(start);
     
+    // Get WETH -> USDT quote
+    let calldata = quote_calldata(
+        cfg.weth_addr.parse()?, 
+        cfg.usdt_addr.parse()?, 
+        volume, 
+        3000
+    );
+    let quote_tx = build_tx(
+        cfg.quoter_v2_addr.parse()?, 
+        cfg.self_addr.parse()?, 
+        calldata, 
+        base_fee
+    );
+
+    let start = measure_start("eth_call");
+    let response = provider.call(quote_tx).await?;
+    let usdt_out = decode_quote_response(response)? as f64 / 1e6; // USDT has 6 decimals
+
+    
+    measure_end(start);
+    let price_data = PriceData {
+        bid: usdt_out * 1.000,
+        ask: usdt_out * 1.000,
+        timestamp: current_timestamp(),
+    };
+
+    // Broadcast price update
+    if let Err(e) = price_tx.send(Some(price_data.clone())) {
+        error!("Failed to send DEX price update: {}", e);
+    }
+
+    info!("WHYPE/USDT: {}/{} ", price_data.bid, price_data.ask); 
+
+
     Ok(())
 }

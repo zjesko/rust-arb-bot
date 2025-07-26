@@ -11,7 +11,7 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use crate::settings;
 use crate::arbitrage::{PriceData, current_timestamp};
 
-pub async fn run_listener(tx: Sender<Option<PriceData>>) {
+pub async fn run_bybit_listener(tx: Sender<Option<PriceData>>) {
     loop {
         match connect_and_subscribe(tx.clone()).await {
             Ok(_) => info!("bybit ws connection closed normally"),
