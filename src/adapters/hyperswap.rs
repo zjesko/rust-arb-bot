@@ -11,12 +11,12 @@ use alloy::{
 };
 use anyhow::Result;
 use log::{error, info};
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 use tokio::sync::watch;
 
-use crate::helpers::{measure_end, measure_start, ONE_ETHER};
+use crate::helpers::{ONE_ETHER};
 use crate::settings;
-use crate::arbitrage::{PriceData, current_timestamp};
+use crate::arbitrage::{PriceData};
 
 
 sol! {
@@ -124,25 +124,20 @@ async fn fetch_quote(
         base_fee
     );
 
-    let start = measure_start("eth_call");
+    let start = Instant::now();
     let response = provider.call(quote_tx).await?;
     let usdt_out = decode_quote_response(response)? as f64 / 1e6; // USDT has 6 decimals
 
-    
-    measure_end(start);
     let price_data = PriceData {
         bid: usdt_out * 1.000,
         ask: usdt_out * 1.000,
-        timestamp: current_timestamp(),
     };
 
-    // Broadcast price update
     if let Err(e) = price_tx.send(Some(price_data.clone())) {
         error!("Failed to send DEX price update: {}", e);
     }
 
-    info!("WHYPE/USDT: {}/{} ", price_data.bid, price_data.ask); 
-
+    info!("WHYPE/USDT: {:.2} / {:.2} (took {:.2}ms)", price_data.bid, price_data.ask, start.elapsed().as_millis());
 
     Ok(())
 }

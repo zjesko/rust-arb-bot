@@ -6,6 +6,8 @@ mod settings;
 use anyhow::Result;
 use log::{error, info};
 use tokio::sync::watch;
+use alloy::providers::ProviderBuilder;
+use std::sync::Arc;
 
 use crate::adapters::bybit::run_bybit_listener;
 use crate::adapters::hyperswap::run_hyperswap_listener;
@@ -18,6 +20,10 @@ async fn main() -> Result<()> {
     let cfg = settings::Settings::load()?;
 
     println!("{:#?}", cfg);
+
+    // Create provider for real-time gas price fetching
+    let provider = ProviderBuilder::new().connect_http(cfg.rpc_url.parse()?);
+    let provider = Arc::new(provider);
 
     let (bybit_tx, bybit_rx) = watch::channel::<Option<PriceData>>(None);
     let (hyperswap_tx, hyperswap_rx) = watch::channel::<Option<PriceData>>(None);
@@ -34,6 +40,7 @@ async fn main() -> Result<()> {
         cfg.clone(),
         bybit_rx,
         hyperswap_rx,
+        provider,
     );
 
     let arbitrage_task = tokio::spawn(async move {

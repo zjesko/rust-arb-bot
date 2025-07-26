@@ -9,11 +9,12 @@ pub struct Settings {
     pub weth_addr: String,
     pub usdt_addr: String,
     pub quoter_v2_addr: String,
-    pub quoter_custom_addr: String,
+    // pub quoter_custom_addr: String,
 
     pub bybit_ticker: String,
     pub bybit_fee_bps: u32,
     pub hyperswap_fee_bps: u32,
+    pub gas_used: u64,
 
     // from env
     pub rpc_url: String,

@@ -9,7 +9,7 @@ use tokio::sync::watch::Sender;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use crate::settings;
-use crate::arbitrage::{PriceData, current_timestamp};
+use crate::arbitrage::{PriceData};
 
 pub async fn run_bybit_listener(tx: Sender<Option<PriceData>>) {
     loop {
@@ -72,15 +72,14 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
 
                     let price_data = PriceData {
                         bid,
-                        ask,
-                        timestamp: current_timestamp(),
+                        ask
                     };
 
                     if let Err(e) = tx.send(Some(price_data.clone())) {
                         error!("failed to send CEX price update: {}", e);
                     }
 
-                    info!("{}: {}/{} ", cfg.bybit_ticker, bid, ask); 
+                    info!("{}: {} / {} ", cfg.bybit_ticker, bid, ask); 
                 }
             }
             Message::Ping(ping) => write.send(Message::Pong(ping)).await?,
