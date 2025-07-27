@@ -9,6 +9,7 @@ pub struct Settings {
     pub weth_addr: String,
     pub usdt_addr: String,
     pub quoter_v2_addr: String,
+    pub pool_addr: String,
     // pub quoter_custom_addr: String,
 
     pub bybit_ticker: String,
