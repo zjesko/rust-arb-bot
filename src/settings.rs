@@ -10,7 +10,7 @@ pub struct Settings {
     pub usdt_addr: String,
     pub quoter_v2_addr: String,
     pub pool_addr: String,
-    // pub quoter_custom_addr: String,
+    pub quoter_custom_addr: String,
 
     pub bybit_ticker: String,
     pub bybit_fee_bps: u32,

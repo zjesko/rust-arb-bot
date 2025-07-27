@@ -3,80 +3,26 @@ use std::time::Duration;
 
 use alloy::{
     network::{TransactionBuilder, Ethereum},
-    primitives::{Address, Bytes, U160, U256, aliases::U24},
+    primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
-    sol,
-    sol_types::{SolCall, SolValue},
-    uint
 };
 
 use revm::{
-    context::result::{ExecutionResult, Output},
     database::{AlloyDB, CacheDB, WrapDatabaseAsync},
-    primitives::{keccak256, TxKind},
-    Context, ExecuteEvm, MainBuilder, MainContext,
-    state::{AccountInfo, Bytecode},
+    state::Bytecode,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use log::{error, info};
 use tokio::time::{sleep, Instant};
 use tokio::sync::watch;
 
 use crate::settings;
 use crate::arbitrage::{PriceData};
+use crate::helpers::revm::{init_cache_db, init_account_with_bytecode, insert_mapping_storage_slot, hydrate_pool_state, revm_call, revm_revert};
+use crate::helpers::abi::{ONE_ETHER, quote_calldata, decode_quote_response, get_amount_out_calldata, decode_get_amount_out_response};
 
-pub static ONE_ETHER: U256 = uint!(1_000_000_000_000_000_000_U256);
-
-sol! {
-    struct QuoteExactInputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint256 amountIn;
-        uint24 fee;
-        uint160 sqrtPriceLimitX96;
-    }
-
-    function quoteExactInputSingle(QuoteExactInputSingleParams memory params)
-    public
-    override
-    returns (
-        uint256 amountOut,
-        uint160 sqrtPriceX96After,
-        uint32 initializedTicksCrossed,
-        uint256 gasEstimate
-    );
-
-}
-
-pub fn quote_calldata(token_in: Address, token_out: Address, amount_in: U256, fee: u32) -> Bytes {
-    let zero_for_one = token_in < token_out;
-
-    let sqrt_price_limit_x96: U160 = if zero_for_one {
-        "4295128749".parse().unwrap()
-    } else {
-        "1461446703485210103287273052203988822378723970341"
-            .parse()
-            .unwrap()
-    };
-
-    let params = QuoteExactInputSingleParams {
-        tokenIn: token_in,
-        tokenOut: token_out,
-        amountIn: amount_in,
-        fee: U24::from(fee),
-        sqrtPriceLimitX96: sqrt_price_limit_x96,
-    };
-
-    Bytes::from(quoteExactInputSingleCall { params }.abi_encode())
-}
-
-
-pub fn decode_quote_response(response: Bytes) -> Result<u128> {
-    let (amount_out, _, _, _) = <(u128, u128, u32, u128)>::abi_decode(&response)?;
-    Ok(amount_out)
-}
 
 pub fn build_tx(to: Address, from: Address, calldata: Bytes, base_fee: u128) -> TransactionRequest {
     TransactionRequest::default()
@@ -113,6 +59,12 @@ pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Res
     let big = U256::MAX / U256::from(2);
     insert_mapping_storage_slot(cfg.weth_addr.parse()?, U256::ZERO, cfg.pool_addr.parse()?, big, &mut cache_db).await?;
     insert_mapping_storage_slot(cfg.usdt_addr.parse()?, U256::ZERO, cfg.pool_addr.parse()?, big, &mut cache_db).await?;
+
+    // let mocked_custom_quoter = include_str!("../bytecode/custom_quoter.hex");
+    // let mocked_custom_quoter = mocked_custom_quoter.parse::<Bytes>().unwrap();
+    // let mocked_custom_quoter = Bytecode::new_raw(mocked_custom_quoter);
+    // init_account_with_bytecode(cfg.quoter_custom_addr.parse()?, mocked_custom_quoter.clone(), &mut cache_db).await?;
+
 
     loop {
         // match fetch_quote(&tx, &provider, &cfg).await {
@@ -171,41 +123,7 @@ async fn fetch_quote(
 }
 
 // revm
-pub fn revm_call<P: Provider + Clone>(
-    from: Address,
-    to: Address,
-    calldata: Bytes,
-    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>,
-) -> Result<Bytes> {
-    let mut evm = Context::mainnet()
-        .with_db(cache_db)
-        .modify_tx_chained(|tx| {
-            tx.caller = from;
-            tx.kind = TxKind::Call(to);
-            tx.data = calldata;
-            tx.value = U256::ZERO;
-        })
-        .build_mainnet();
 
-    let ref_tx = evm.replay().unwrap();
-    let result = ref_tx.result;
-
-    let value = match result {
-        ExecutionResult::Success {
-            output: Output::Call(value),
-            ..
-        } => value,
-        result => {
-            return Err(anyhow!("execution failed: {result:?}"));
-        }
-    };
-
-    Ok(value)
-}
-
-pub fn init_cache_db<P: Provider + Clone>(provider: Arc<P>) -> CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>> {
-    CacheDB::new(WrapDatabaseAsync::new(AlloyDB::new((*provider).clone(), Default::default())).unwrap())
-}
 
 async fn fetch_quote_revm<P: Provider + Clone>(
     price_tx: &watch::Sender<Option<PriceData>>, 
@@ -231,8 +149,8 @@ async fn fetch_quote_revm<P: Provider + Clone>(
     let usdt_out = decode_quote_response(response)? as f64 / 1e6; // USDT has 6 decimals
 
     let price_data = PriceData {
-        bid: usdt_out * 1.000,
-        ask: usdt_out * 1.000,
+        bid: usdt_out,
+        ask: usdt_out,
     };
 
     if let Err(e) = price_tx.send(Some(price_data.clone())) {
@@ -244,48 +162,33 @@ async fn fetch_quote_revm<P: Provider + Clone>(
     Ok(())
 }
 
-pub async fn init_account_with_bytecode<P: Provider + Clone>(
-    address: Address,
-    bytecode: Bytecode,
-    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>
+async fn fetch_quote_revm_custom<P: Provider + Clone>(
+    price_tx: &watch::Sender<Option<PriceData>>, 
+    cfg: &settings::Settings,
+    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>,
+    provider: Arc<P>
 ) -> Result<()> {
-    let code_hash = bytecode.hash_slow();
-    let acc_info = AccountInfo {
-        balance: U256::ZERO,
-        nonce: 0_u64,
-        code: Some(bytecode),
-        code_hash,
+    // Use constant 1.0 ETH trade size for consistency with arbitrage engine
+    let volume = ONE_ETHER;
+    
+    hydrate_pool_state(cache_db, &provider, cfg.pool_addr.parse()?).await?;
+
+    let calldata = get_amount_out_calldata(cfg.pool_addr.parse()?, cfg.weth_addr.parse()?, cfg.usdt_addr.parse()?, volume);
+
+    let start = Instant::now();
+    let response = revm_revert(cfg.self_addr.parse()?, cfg.quoter_custom_addr.parse()?, calldata, cache_db)?;
+    let usdt_out = decode_get_amount_out_response(response)? as f64 / 1e6;
+
+    let price_data = PriceData {
+        bid: usdt_out,
+        ask: usdt_out,
     };
 
-    cache_db.insert_account_info(address, acc_info);
-    Ok(())
-}
+    if let Err(e) = price_tx.send(Some(price_data.clone())) {
+        error!("failed to send DEX price update: {}", e);
+    }
 
-pub async fn insert_mapping_storage_slot<P: Provider + Clone>(
-    contract: Address,
-    slot: U256,
-    slot_address: Address,
-    value: U256,
-    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>
-) -> Result<()> {
-    let hashed_balance_slot = keccak256((slot_address, slot).abi_encode());
-
-    cache_db.insert_account_storage(contract, hashed_balance_slot.into(), value)?;
-    Ok(())
-}
-
-async fn hydrate_pool_state<P: Provider + Clone>(
-    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>,
-    provider: &Arc<P>,
-    pool: Address
-) -> Result<()> {
-    // slot0 (position 0)
-    let slot0 = provider.get_storage_at(pool, U256::ZERO).await?;
-    cache_db.insert_account_storage(pool, U256::from(0), slot0)?;
-
-    // liquidity (slot 2)
-    let liq = provider.get_storage_at(pool, U256::from(2)).await?;
-    cache_db.insert_account_storage(pool, U256::from(2), liq)?;
+    info!("WHYPE/USDT: {:.2} / {:.2} (took {:.2}ms REVM)", price_data.bid, price_data.ask, start.elapsed().as_millis());
 
     Ok(())
 }

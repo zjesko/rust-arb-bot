@@ -1,6 +1,7 @@
 mod adapters;
 mod arbitrage;
 mod settings;
+mod helpers;
 
 use anyhow::Result;
 use log::{error, info};

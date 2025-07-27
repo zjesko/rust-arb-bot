@@ -10,7 +10,7 @@ usdt_addr = "0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb"
 # pool_addr = "0xf40d57783c3359f160d006b9bc7a2e4311fe6a86"
 pool_addr = "0x56abfaf40f5b7464e9cc8cff1af13863d6914508"
 quoter_v2_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
-quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7C"
+quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7D"
 
 # ticker
 bybit_ticker = "HYPEUSDT"
