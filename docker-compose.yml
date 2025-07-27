@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  arb-bot:
+    build: .
+    container_name: rust-arb-bot
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - ./config:/app/config:ro
+    env_file:
+      - .env 
