@@ -5,7 +5,7 @@ use log::{info, warn};
 use std::sync::Arc;
 use tokio::sync::watch;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PriceData {
     pub bid: f64,
     pub ask: f64,

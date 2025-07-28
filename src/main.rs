@@ -35,7 +35,6 @@ async fn main() -> Result<()> {
     let dex_task = tokio::spawn(run_hyperswap_listener(hyperswap_tx));
 
     info!("initializing arbitrage detection engine...");
-
     let mut arbitrage_engine = ArbEngine::new(cfg.clone(), bybit_rx, hyperswap_rx, provider);
 
     let arbitrage_task = tokio::spawn(async move {

@@ -44,7 +44,7 @@ pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Res
     insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db).await?;
 
     loop {
-        // match fetch_quote(&tx, &provider, &cfg).await {
+        // match fetch_quote(&cfg, &provider, &tx).await {
             // Ok(_) => {},
             // Err(e) => error!("DEX price fetch error: {}", e),
         // }
@@ -53,7 +53,7 @@ pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Res
             Err(e) => error!("DEX price fetch error: {}", e),
         }
         
-        // Fetch DEX prices every 1 seconds
+        // fetch DEX prices every 1 seconds
         sleep(Duration::from_millis(1000)).await;
     }
 }
@@ -103,7 +103,7 @@ pub async fn fetch_quote(
         error!("failed to send DEX price update: {}", e);
     }
 
-    info!("WHYPE/USDT: {:.2} / {:.2} (took {:.2}ms)", price_data.bid, price_data.ask, start.elapsed().as_millis());
+    info!("⚠️ HYPERSWAP WHYPE/USDT: bid ${:.2} ask ${:.2} (took {:.2}ms eth_call)", price_data.bid, price_data.ask, start.elapsed().as_millis());
 
     Ok(())
 }

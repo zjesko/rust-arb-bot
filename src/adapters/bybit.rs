@@ -39,6 +39,9 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
     write.send(Message::Text(subscribe_msg.to_string())).await?;
     info!("subscribed to {} orderbook", cfg.bybit_ticker);
 
+    // Track previous price to avoid duplicate updates
+    let mut last_price: Option<PriceData> = None;
+
     while let Some(msg) = read.next().await {
         match msg? {
             Message::Text(text) => {
@@ -74,11 +77,15 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
 
                     let price_data = PriceData { bid, ask };
 
-                    if let Err(e) = tx.send(Some(price_data.clone())) {
-                        error!("failed to send CEX price update: {}", e);
-                    }
+                    // Only send update if price has changed
+                    if last_price.as_ref() != Some(&price_data) {
+                        if let Err(e) = tx.send(Some(price_data.clone())) {
+                            error!("failed to send CEX price update: {}", e);
+                        }
 
-                    info!("⚠️ BYBIT {}: bid ${:.2} ask ${:.2}", cfg.bybit_ticker, bid, ask);
+                        info!("⚠️ BYBIT {}: bid ${:.2} ask ${:.2}", cfg.bybit_ticker, bid, ask);
+                        last_price = Some(price_data);
+                    }
                 }
             }
             Message::Ping(ping) => write.send(Message::Pong(ping)).await?,

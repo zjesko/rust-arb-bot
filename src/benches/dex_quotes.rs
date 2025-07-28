@@ -2,14 +2,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use alloy::providers::ProviderBuilder;
-
-use revm::{
-    primitives::{Bytes, U256},
-    state::Bytecode,
-};
-
+use revm::{primitives::{Bytes, U256}, state::Bytecode};
 use anyhow::Result;
 use tokio::sync::watch;
+use log::info;
 
 use rust_arb_bot::adapters::hyperswap::{fetch_quote, fetch_quote_revm};
 use rust_arb_bot::arbitrage::PriceData;
@@ -19,75 +15,61 @@ use rust_arb_bot::helpers::revm::{
 use rust_arb_bot::settings::Settings;
 
 pub async fn run_benchmark() -> Result<()> {
-    println!("Starting DEX Quotes Benchmark");
-    println!("============================");
+    info!("DEX Quotes Benchmark");
+    info!("=======================");
 
     let cfg = Settings::load()?;
-    println!("cfg: {:?}", cfg);
-
-    let provider = ProviderBuilder::new().connect_http(cfg.rpc_url.parse()?);
-    let provider = Arc::new(provider);
-
+    let provider = Arc::new(ProviderBuilder::new().connect_http(cfg.rpc_url.parse()?));
     let (price_tx, _price_rx) = watch::channel(None::<PriceData>);
 
     let mut cache_db = init_cache_db(provider.clone());
+    let mut cache_db_unmocked = init_cache_db(provider.clone());
 
-    // Initialize mocked ERC20 contracts for REVM
-    let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
-    let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
+    // Setup mocked ERC20 contracts
+    let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex").parse::<Bytes>()?;
     let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
     init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
 
     let big = U256::MAX / U256::from(2);
-    insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        .await?;
-    insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        .await?;
-
-    let checkpoints = [1, 5, 20];
-    let max_calls = 20;
-
-    println!("\n--- benchmarking fetch_quote ---");
+    insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db).await?;
+    insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db).await?;
 
     // Benchmark fetch_quote
+    info!("1. Standard fetch_quote:");
     let start = Instant::now();
-    for i in 1..=max_calls {
-        if let Err(e) = fetch_quote(&cfg, &provider, &price_tx).await {
-            eprintln!("fetch_quote error on call {}: {}", i, e);
-        }
+    fetch_quote(&cfg, &provider, &price_tx).await?;
+    info!("First call: {:?}", start.elapsed());
 
-        // Report at checkpoints
-        if checkpoints.contains(&i) {
-            let elapsed = start.elapsed();
-            let avg_time = elapsed / i;
-            println!(
-                "fetch_quote:      {} calls took {:?} (avg: {:?} per call)",
-                i, elapsed, avg_time
-            );
-        }
-    }
-
-    println!("\n--- benchmarking fetch_quote_revm ---");
-
-    // Benchmark fetch_quote_revm
     let start = Instant::now();
-    for i in 1..=max_calls {
-        if let Err(e) = fetch_quote_revm(&cfg, provider.clone(), &price_tx, &mut cache_db).await {
-            eprintln!("fetch_quote_revm error on call {}: {}", i, e);
-        }
-
-        // Report at checkpoints
-        if checkpoints.contains(&i) {
-            let elapsed = start.elapsed();
-            let avg_time = elapsed / i;
-            println!(
-                "fetch_quote_revm: {} calls took {:?} (avg: {:?} per call)",
-                i, elapsed, avg_time
-            );
-        }
+    for _ in 0..10 {
+        fetch_quote(&cfg, &provider, &price_tx).await?;
     }
+    info!("10 calls avg: {:?}", start.elapsed() / 10);
 
-    println!("\nBenchmark completed!");
+    // Benchmark fetch_quote_revm (no mocking)
+    info!("2. REVM without mocking:");
+    let start = Instant::now();
+    fetch_quote_revm(&cfg, provider.clone(), &price_tx, &mut cache_db_unmocked).await?;
+    info!("First call: {:?}", start.elapsed());
+
+    let start = Instant::now();
+    for _ in 0..10 {
+        fetch_quote_revm(&cfg, provider.clone(), &price_tx, &mut cache_db_unmocked).await?;
+    }
+    info!("10 calls avg: {:?}", start.elapsed() / 10);
+
+    // Benchmark fetch_quote_revm (with mocking)
+    info!("3. REVM with mocking:");
+    let start = Instant::now();
+    fetch_quote_revm(&cfg, provider.clone(), &price_tx, &mut cache_db).await?;
+    info!("First call: {:?}", start.elapsed());
+
+    let start = Instant::now();
+    for _ in 0..10 {
+        fetch_quote_revm(&cfg, provider.clone(), &price_tx, &mut cache_db).await?;
+    }
+    info!("10 calls avg: {:?}", start.elapsed() / 10);
+
     Ok(())
 }
 
