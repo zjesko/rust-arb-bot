@@ -147,7 +147,7 @@ pub async fn fetch_quote_revm<P: Provider + Clone>(
         error!("failed to send DEX price update: {}", e);
     }
 
-    info!("WHYPE/USDT: {:.2} / {:.2} (took {:.2}ms revm_call)", price_data.bid, price_data.ask, start.elapsed().as_millis());
+    info!("⚠️ HYPERSWAP WHYPE/USDT: bid ${:.2} ask ${:.2} (took {:.2}ms revm_call)", price_data.bid, price_data.ask, start.elapsed().as_millis());
 
     Ok(())
 }

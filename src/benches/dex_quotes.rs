@@ -33,16 +33,16 @@ pub async fn run_benchmark() -> Result<()> {
     let mut cache_db = init_cache_db(provider.clone());
 
     // Initialize mocked ERC20 contracts for REVM
-    // let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
-    // let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
-    // let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
-    // init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
+    let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
+    let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
+    let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
+    init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
 
-    // let big = U256::MAX / U256::from(2);
-    // insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        // .await?;
-    // insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        // .await?;
+    let big = U256::MAX / U256::from(2);
+    insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
+        .await?;
+    insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
+        .await?;
 
     let checkpoints = [1, 5, 20];
     let max_calls = 20;

@@ -78,7 +78,7 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
                         error!("failed to send CEX price update: {}", e);
                     }
 
-                    info!("{}: {} / {} ", cfg.bybit_ticker, bid, ask);
+                    info!("⚠️ BYBIT {}: bid ${:.2} ask ${:.2}", cfg.bybit_ticker, bid, ask);
                 }
             }
             Message::Ping(ping) => write.send(Message::Pong(ping)).await?,
