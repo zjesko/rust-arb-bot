@@ -2,14 +2,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use alloy::{
-    network::TransactionBuilder,
-    primitives::{Address, Bytes, U160, U256, aliases::U24},
+    network::Ethereum,
+    primitives::{Bytes, U256},
     providers::{Provider, ProviderBuilder},
-    rpc::types::TransactionRequest,
-    sol,
-    sol_types::{SolCall, SolValue},
-    uint
 };
+
+use revm::{
+    database::{AlloyDB, CacheDB, WrapDatabaseAsync},
+    state::Bytecode,
+};
+
 use anyhow::Result;
 use log::{error, info};
 use tokio::time::{sleep, Instant};
@@ -17,73 +19,8 @@ use tokio::sync::watch;
 
 use crate::settings;
 use crate::arbitrage::{PriceData};
-
-pub static ONE_ETHER: U256 = uint!(1_000_000_000_000_000_000_U256);
-
-sol! {
-    struct QuoteExactInputSingleParams {
-        address tokenIn;
-        address tokenOut;
-        uint256 amountIn;
-        uint24 fee;
-        uint160 sqrtPriceLimitX96;
-    }
-
-    function quoteExactInputSingle(QuoteExactInputSingleParams memory params)
-    public
-    override
-    returns (
-        uint256 amountOut,
-        uint160 sqrtPriceX96After,
-        uint32 initializedTicksCrossed,
-        uint256 gasEstimate
-    );
-
-}
-
-pub fn quote_calldata(token_in: Address, token_out: Address, amount_in: U256, fee: u32) -> Bytes {
-    let zero_for_one = token_in < token_out;
-
-    let sqrt_price_limit_x96: U160 = if zero_for_one {
-        "4295128749".parse().unwrap()
-    } else {
-        "1461446703485210103287273052203988822378723970341"
-            .parse()
-            .unwrap()
-    };
-
-    let params = QuoteExactInputSingleParams {
-        tokenIn: token_in,
-        tokenOut: token_out,
-        amountIn: amount_in,
-        fee: U24::from(fee),
-        sqrtPriceLimitX96: sqrt_price_limit_x96,
-    };
-
-    Bytes::from(quoteExactInputSingleCall { params }.abi_encode())
-}
-
-
-pub fn decode_quote_response(response: Bytes) -> Result<u128> {
-    let (amount_out, _, _, _) = <(u128, u128, u32, u128)>::abi_decode(&response)?;
-    Ok(amount_out)
-}
-
-pub fn build_tx(to: Address, from: Address, calldata: Bytes, base_fee: u128) -> TransactionRequest {
-    TransactionRequest::default()
-        .to(to)
-        .from(from)
-        .with_input(calldata)
-        .nonce(0)
-        .gas_limit(1000000)
-        .max_fee_per_gas(base_fee)
-        .max_priority_fee_per_gas(0)
-        .with_chain_id(999) // Hyperliquid mainnet chain ID
-        .build_unsigned()
-        .unwrap()
-        .into()
-}
-
+use crate::helpers::revm::{init_cache_db, init_account_with_bytecode, insert_mapping_storage_slot, hydrate_pool_state, revm_call};
+use crate::helpers::abi::{ONE_ETHER, quote_calldata, decode_quote_response, quote_exact_output_calldata, decode_quote_output_response, build_tx};
 
 pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Result<()> {
     let cfg: settings::Settings = settings::Settings::load()?;
@@ -91,54 +28,126 @@ pub async fn run_hyperswap_listener(tx: watch::Sender<Option<PriceData>>) -> Res
     let provider = ProviderBuilder::new().connect_http(cfg.rpc_url.parse()?);
     let provider = Arc::new(provider);
 
+    // initialize cache_db
+    let mut cache_db = init_cache_db(provider.clone());
+
+    // mock ERC‑20s with generic_erc20 bytecode
+    let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
+    let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
+    let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
+    init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
+    // init_account_with_bytecode(cfg.usdt_addr, mocked_erc20.clone(), &mut cache_db).await?;
+
+    // mock pool state balances
+    let big = U256::MAX / U256::from(2);
+    insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db).await?;
+    insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db).await?;
+
     loop {
-        match fetch_quote(&tx, &provider, &cfg).await {
+        // match fetch_quote(&cfg, &provider, &tx).await {
+            // Ok(_) => {},
+            // Err(e) => error!("DEX price fetch error: {}", e),
+        // }
+        match fetch_quote_revm(&cfg, provider.clone(), &tx, &mut cache_db).await {
             Ok(_) => {},
             Err(e) => error!("DEX price fetch error: {}", e),
         }
         
-        // Fetch DEX prices every 1 seconds
-        sleep(Duration::from_millis(200)).await;
+        // fetch DEX prices every 1 seconds
+        sleep(Duration::from_millis(1000)).await;
     }
 }
 
-async fn fetch_quote(
-    price_tx: &watch::Sender<Option<PriceData>>, 
+pub async fn fetch_quote(
+    cfg: &settings::Settings,
     provider: &Arc<impl Provider>, 
-    cfg: &settings::Settings
+    price_tx: &watch::Sender<Option<PriceData>>, 
 ) -> Result<()> {
-    let base_fee = provider.get_gas_price().await?;
-    // Use constant 1.0 ETH trade size for consistency with arbitrage engine
     let volume = ONE_ETHER;
+    let base_fee = provider.get_gas_price().await?;
     
-    // Get WETH -> USDT quote
-    let calldata = quote_calldata(
-        cfg.weth_addr.parse()?, 
-        cfg.usdt_addr.parse()?, 
-        volume, 
-        3000
-    );
-    let quote_tx = build_tx(
-        cfg.quoter_v2_addr.parse()?, 
-        cfg.self_addr.parse()?, 
-        calldata, 
-        base_fee
-    );
-
     let start = Instant::now();
-    let response = provider.call(quote_tx).await?;
-    let usdt_out = decode_quote_response(response)? as f64 / 1e6; // USDT has 6 decimals
+
+    let sell_weth_calldata = quote_calldata(
+        cfg.weth_addr, 
+        cfg.usdt_addr, 
+        volume, 
+        cfg.hyperswap_fee_bps
+    );
+    let sell_response = provider.call(build_tx(
+        cfg.quoter_v2_addr, 
+        cfg.self_addr, 
+        sell_weth_calldata, 
+        base_fee
+    )).await?;
+
+    let buy_weth_calldata = quote_exact_output_calldata(
+        cfg.usdt_addr, 
+        cfg.weth_addr, 
+        volume, 
+        cfg.hyperswap_fee_bps
+    );
+    let buy_response = provider.call(build_tx(
+        cfg.quoter_v2_addr, 
+        cfg.self_addr, 
+        buy_weth_calldata, 
+        base_fee
+    )).await?;
 
     let price_data = PriceData {
-        bid: usdt_out * 1.000,
-        ask: usdt_out * 1.000,
+        bid: decode_quote_response(sell_response)? as f64 / 1e6,
+        ask: decode_quote_output_response(buy_response)? as f64 / 1e6
     };
 
     if let Err(e) = price_tx.send(Some(price_data.clone())) {
-        error!("Failed to send DEX price update: {}", e);
+        error!("failed to send DEX price update: {}", e);
     }
 
-    info!("WHYPE/USDT: {:.2} / {:.2} (took {:.2}ms)", price_data.bid, price_data.ask, start.elapsed().as_millis());
+    info!("⚠️ HYPERSWAP WHYPE/USDT: bid ${:.2} ask ${:.2} (took {:.2}ms eth_call)", price_data.bid, price_data.ask, start.elapsed().as_millis());
+
+    Ok(())
+}
+
+// REVM-based quote fetching for better performance
+pub async fn fetch_quote_revm<P: Provider + Clone>(
+    cfg: &settings::Settings,
+    provider: Arc<P>,
+    price_tx: &watch::Sender<Option<PriceData>>, 
+    cache_db: &mut CacheDB<WrapDatabaseAsync<AlloyDB<Ethereum, P>>>,
+) -> Result<()> {
+    let volume = ONE_ETHER;
+
+    let start = Instant::now();
+
+    // ensure pool state is up to date
+    hydrate_pool_state(cache_db, &provider, cfg.pool_addr).await?;
+
+    let sell_weth_calldata = quote_calldata(
+        cfg.weth_addr, 
+        cfg.usdt_addr, 
+        volume, 
+        cfg.hyperswap_fee_bps
+    );
+    let sell_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, sell_weth_calldata, cache_db)?;
+
+    let buy_weth_calldata = quote_exact_output_calldata(
+        cfg.usdt_addr, 
+        cfg.weth_addr, 
+        volume, 
+        cfg.hyperswap_fee_bps
+    );
+    let ask_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, buy_weth_calldata, cache_db)?;
+
+    let price_data = PriceData {
+        bid: decode_quote_response(sell_response)? as f64 / 1e6,
+        ask: decode_quote_output_response(ask_response)? as f64 / 1e6,
+    };
+
+    if let Err(e) = price_tx.send(Some(price_data.clone())) {
+        error!("failed to send DEX price update: {}", e);
+    }
+
+    info!("⚠️ HYPERSWAP WHYPE/USDT: bid ${:.2} ask ${:.2} (took {:.2}ms revm_call)", price_data.bid, price_data.ask, start.elapsed().as_millis());
 
     Ok(())
 }
