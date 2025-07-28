@@ -72,7 +72,7 @@ pub async fn fetch_quote(
         cfg.weth_addr, 
         cfg.usdt_addr, 
         volume, 
-        cfg.hyperswap_fee_bps
+        cfg.dex_fee_bps
     );
     let sell_response = provider.call(build_tx(
         cfg.quoter_v2_addr, 
@@ -85,7 +85,7 @@ pub async fn fetch_quote(
         cfg.usdt_addr, 
         cfg.weth_addr, 
         volume, 
-        cfg.hyperswap_fee_bps
+        cfg.dex_fee_bps
     );
     let buy_response = provider.call(build_tx(
         cfg.quoter_v2_addr, 
@@ -126,7 +126,7 @@ pub async fn fetch_quote_revm<P: Provider + Clone>(
         cfg.weth_addr, 
         cfg.usdt_addr, 
         volume, 
-        cfg.hyperswap_fee_bps
+        cfg.dex_fee_bps
     );
     let sell_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, sell_weth_calldata, cache_db)?;
 
@@ -134,7 +134,7 @@ pub async fn fetch_quote_revm<P: Provider + Clone>(
         cfg.usdt_addr, 
         cfg.weth_addr, 
         volume, 
-        cfg.hyperswap_fee_bps
+        cfg.dex_fee_bps
     );
     let ask_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, buy_weth_calldata, cache_db)?;
 

@@ -1,7 +1,7 @@
 use crate::settings::Settings;
 use alloy::providers::Provider;
 use anyhow::Result;
-use log::{info, warn};
+use log::{info};
 use std::sync::Arc;
 use tokio::sync::watch;
 
@@ -74,19 +74,22 @@ impl ArbEngine {
 
         let gas_price_wei = self.provider.get_gas_price().await?;
 
-        self.calculate_arbitrage(
-            cex_price.ask,
-            dex_price.bid,
-            ArbDirection::BuyCex,
-            gas_price_wei,
-        );
-
-        self.calculate_arbitrage(
-            dex_price.ask,
-            cex_price.bid,
-            ArbDirection::BuyDex,
-            gas_price_wei,
-        );
+        if dex_price.bid > cex_price.ask {
+            self.calculate_arbitrage(
+                cex_price.ask,
+                dex_price.bid,
+                ArbDirection::BuyCex,
+                gas_price_wei,
+            );
+        }
+        if cex_price.bid > dex_price.ask {
+            self.calculate_arbitrage(
+                dex_price.ask,
+                cex_price.bid,
+                ArbDirection::BuyDex,
+                gas_price_wei,
+            );
+        }
 
         Ok(())
     }
@@ -101,7 +104,7 @@ impl ArbEngine {
         let gross_profit = sell_price - buy_price;
 
         // Calculate gas cost in HYPE tokens
-        let gas_cost_wei = gas_price_wei * self.config.gas_used as u128;
+        let gas_cost_wei = gas_price_wei * self.config.dex_gas_used as u128;
         let gas_cost_hype = gas_cost_wei as f64 / 1e18;
 
         let hype_price = match direction {
@@ -114,18 +117,18 @@ impl ArbEngine {
             ArbDirection::BuyCex => buy_price,
             ArbDirection::BuyDex => sell_price,
         };
-        let bybit_fee_usd = (self.config.bybit_fee_bps as f64 / 10000.0) * cex_price;
-        let net_profit = gross_profit - bybit_fee_usd - gas_cost_usd;
+        let cex_fee_usd = (self.config.cex_fee_bps as f64 / 10000.0) * cex_price;
+        let net_profit = gross_profit - cex_fee_usd - gas_cost_usd;
 
         if net_profit <= 0.0 {
             info!(
-                "🔴 NO ARB: buy ${:.4}, sell ${:.4}, net {:.4}$, bybit fee: ${:.4}, gas: ${:.4}",
-                buy_price, sell_price, net_profit, bybit_fee_usd, gas_cost_usd
+                "🔴 NO ARB: buy ${:.4}, sell ${:.4}, net ${:.4}, cex fee: ${:.4}, gas: ${:.4}",
+                buy_price, sell_price, net_profit, cex_fee_usd, gas_cost_usd
             );
         } else {
             info!(
-                "🟢 ARB: buy ${:.4}, sell ${:.4}, net {:.4}$, bybit fee: ${:.4}, gas: ${:.4}",
-                buy_price, sell_price, net_profit, bybit_fee_usd, gas_cost_usd
+                "🟢 ARB: buy ${:.4}, sell ${:.4}, net ${:.4}, cex fee: ${:.4}, gas: ${:.4}",
+                buy_price, sell_price, net_profit, cex_fee_usd, gas_cost_usd
             );
         }
     }

@@ -1,6 +1,7 @@
 # enpoints
 rpc_url = "https://rpc.hyperliquid.xyz/evm"
 bybit_ws_endpoint = "wss://stream.bybit.com/v5/public/spot"
+gateio_ws_endpoint = "wss://api.gateio.ws/ws/v4/"
 
 # contracts
 self_addr = "0x1234567890123456789012345678901234567890"
@@ -14,9 +15,10 @@ quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7D"
 
 # ticker
 bybit_ticker = "HYPEUSDT"
+gateio_ticker = "HYPE_USDT"
 
-bybit_fee_bps = 100
-hyperswap_fee_bps = 3000
+dex_fee_bps = 3000
+cex_fee_bps = 10
 
-gas_used = 200000
+dex_gas_used = 200000
 

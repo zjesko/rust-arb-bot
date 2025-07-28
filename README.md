@@ -10,6 +10,36 @@ A high-performance arbitrage bot written in Rust that monitors price differences
 - Comprehensive fee and gas cost calculation
 - Docker support for easy deployment
 
+## Project Structure
+
+```
+rust-arb-bot/
+├── Cargo.toml                    # Project dependencies and metadata
+├── Cargo.lock                    # Dependency lock file
+├── docker-compose.yml            # Docker deployment configuration
+├── Dockerfile                    # Container build instructions
+├── env.example                   # Environment variables template
+├── config/
+│   └── default.toml              # Main configuration file
+├── custom-quoter-contracts/      # Solidity contracts for DEX quotes
+└── src/                          # Main Rust source code
+    ├── main.rs                   # Application entry point
+    ├── lib.rs                    # Library root
+    ├── settings.rs               # Configuration management
+    ├── arbitrage.rs              # Core arbitrage logic
+    ├── adapters/                 # Exchange integrations
+    │   ├── mod.rs
+    │   ├── bybit.rs              # Bybit WebSocket client
+    │   └── hyperswap.rs          # HyperSwap DEX integration
+    ├── helpers/                  # Utility modules
+    │   ├── mod.rs
+    │   ├── abi.rs                # ABI encoding/decoding
+    │   └── revm.rs               # REVM optimization helpers
+    ├── benches/                  # Performance benchmarks
+    │   └── dex_quotes.rs         # DEX quote benchmarking
+    └── bytecode/                 # Precompiled contract bytecode
+        └── generic_erc20.hex     # Generic ERC20 bytecode
+```
 ## Setup Instructions
 
 ### Prerequisites
@@ -112,11 +142,6 @@ hyperswap_fee_bps = 3000   # 30% HyperSwap pool fee
 # Gas estimation
 gas_used = 200000          # Estimated gas for arbitrage transaction
 ```
-
-### Key Configuration Notes:
-- **Pool Address**: Must match the HyperSwap HYPE/USDT pool you want to arbitrage
-- **Fee BPS**: Basis points (1 BPS = 0.01%)
-- **Gas Used**: Conservative estimate for transaction gas consumption
 
 ## Optimizations
 

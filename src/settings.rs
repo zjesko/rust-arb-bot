@@ -14,13 +14,15 @@ pub struct Settings {
     pub quoter_custom_addr: Address,
 
     pub bybit_ticker: String,
-    pub bybit_fee_bps: u32,
-    pub hyperswap_fee_bps: u32,
-    pub gas_used: u64,
+    pub gateio_ticker: String,
+    pub dex_fee_bps: u32,
+    pub cex_fee_bps: u32,
+    pub dex_gas_used: u64,
 
     // from env
     pub rpc_url: String,
     pub bybit_ws_endpoint: String,
+    pub gateio_ws_endpoint: String,
 }
 
 impl Settings {
