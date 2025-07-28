@@ -97,8 +97,8 @@ pub async fn hydrate_pool_state<P: Provider + Clone>(
     cache_db.insert_account_storage(pool, U256::from(0), slot0)?;
 
     // liquidity (slot 2)
-    let liq = provider.get_storage_at(pool, U256::from(2)).await?;
-    cache_db.insert_account_storage(pool, U256::from(2), liq)?;
+    // let liq = provider.get_storage_at(pool, U256::from(2)).await?;
+    // cache_db.insert_account_storage(pool, U256::from(2), liq)?;
 
     Ok(())
 }

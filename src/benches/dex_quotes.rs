@@ -33,16 +33,16 @@ pub async fn run_benchmark() -> Result<()> {
     let mut cache_db = init_cache_db(provider.clone());
 
     // Initialize mocked ERC20 contracts for REVM
-    let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
-    let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
-    let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
-    init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
+    // let mocked_erc20 = include_str!("../bytecode/generic_erc20.hex");
+    // let mocked_erc20 = mocked_erc20.parse::<Bytes>().unwrap();
+    // let mocked_erc20 = Bytecode::new_raw(mocked_erc20);
+    // init_account_with_bytecode(cfg.weth_addr, mocked_erc20.clone(), &mut cache_db).await?;
 
-    let big = U256::MAX / U256::from(2);
-    insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        .await?;
-    insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
-        .await?;
+    // let big = U256::MAX / U256::from(2);
+    // insert_mapping_storage_slot(cfg.weth_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
+        // .await?;
+    // insert_mapping_storage_slot(cfg.usdt_addr, U256::ZERO, cfg.pool_addr, big, &mut cache_db)
+        // .await?;
 
     let checkpoints = [1, 5, 20];
     let max_calls = 20;
@@ -50,22 +50,22 @@ pub async fn run_benchmark() -> Result<()> {
     println!("\n--- benchmarking fetch_quote ---");
 
     // Benchmark fetch_quote
-    // let start = Instant::now();
-    // for i in 1..=max_calls {
-    //     if let Err(e) = fetch_quote(&cfg, &provider, &price_tx).await {
-    //         eprintln!("fetch_quote error on call {}: {}", i, e);
-    //     }
+    let start = Instant::now();
+    for i in 1..=max_calls {
+        if let Err(e) = fetch_quote(&cfg, &provider, &price_tx).await {
+            eprintln!("fetch_quote error on call {}: {}", i, e);
+        }
 
-    //     // Report at checkpoints
-    //     if checkpoints.contains(&i) {
-    //         let elapsed = start.elapsed();
-    //         let avg_time = elapsed / i;
-    //         println!(
-    //             "fetch_quote:      {} calls took {:?} (avg: {:?} per call)",
-    //             i, elapsed, avg_time
-    //         );
-    //     }
-    // }
+        // Report at checkpoints
+        if checkpoints.contains(&i) {
+            let elapsed = start.elapsed();
+            let avg_time = elapsed / i;
+            println!(
+                "fetch_quote:      {} calls took {:?} (avg: {:?} per call)",
+                i, elapsed, avg_time
+            );
+        }
+    }
 
     println!("\n--- benchmarking fetch_quote_revm ---");
 
