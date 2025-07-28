@@ -3,13 +3,13 @@ use std::time::Duration;
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
-use serde_json::{json, Value};
-use tokio::time::sleep;
+use serde_json::{Value, json};
 use tokio::sync::watch::Sender;
+use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
+use crate::arbitrage::PriceData;
 use crate::settings;
-use crate::arbitrage::{PriceData};
 
 pub async fn run_bybit_listener(tx: Sender<Option<PriceData>>) {
     loop {
@@ -17,7 +17,7 @@ pub async fn run_bybit_listener(tx: Sender<Option<PriceData>>) {
             Ok(_) => info!("bybit ws connection closed normally"),
             Err(e) => error!("bybit ws connection error: {}", e),
         }
-        
+
         info!("reconnecting in 5 seconds...");
         sleep(Duration::from_secs(5)).await;
     }
@@ -52,7 +52,8 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
                         continue;
                     };
 
-                    let bid = orderbook_data.get("b")
+                    let bid = orderbook_data
+                        .get("b")
                         .and_then(|b| b.as_array())
                         .and_then(|bids| bids.first())
                         .and_then(|bid| bid.as_array())
@@ -61,7 +62,8 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
                         .and_then(|s| s.parse::<f64>().ok())
                         .unwrap_or(0.0);
 
-                    let ask = orderbook_data.get("a")
+                    let ask = orderbook_data
+                        .get("a")
                         .and_then(|a| a.as_array())
                         .and_then(|asks| asks.first())
                         .and_then(|ask| ask.as_array())
@@ -70,16 +72,13 @@ async fn connect_and_subscribe(tx: Sender<Option<PriceData>>) -> Result<()> {
                         .and_then(|s| s.parse::<f64>().ok())
                         .unwrap_or(0.0);
 
-                    let price_data = PriceData {
-                        bid,
-                        ask
-                    };
+                    let price_data = PriceData { bid, ask };
 
                     if let Err(e) = tx.send(Some(price_data.clone())) {
                         error!("failed to send CEX price update: {}", e);
                     }
 
-                    info!("{}: {} / {} ", cfg.bybit_ticker, bid, ask); 
+                    info!("{}: {} / {} ", cfg.bybit_ticker, bid, ask);
                 }
             }
             Message::Ping(ping) => write.send(Message::Pong(ping)).await?,

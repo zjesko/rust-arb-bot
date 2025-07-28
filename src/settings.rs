@@ -1,3 +1,4 @@
+use alloy::primitives::Address;
 use anyhow::Result;
 use config;
 use dotenvy;
@@ -5,12 +6,12 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
-    pub self_addr: String,
-    pub weth_addr: String,
-    pub usdt_addr: String,
-    pub quoter_v2_addr: String,
-    pub pool_addr: String,
-    pub quoter_custom_addr: String,
+    pub self_addr: Address,
+    pub weth_addr: Address,
+    pub usdt_addr: Address,
+    pub quoter_v2_addr: Address,
+    pub pool_addr: Address,
+    pub quoter_custom_addr: Address,
 
     pub bybit_ticker: String,
     pub bybit_fee_bps: u32,

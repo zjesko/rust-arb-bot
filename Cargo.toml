@@ -5,6 +5,10 @@ name = "rust-arb-bot"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "dex-quotes-bench"
+path = "src/benches/dex_quotes.rs"
+
 [dependencies]
 alloy = "1.0.23"
 anyhow = "1.0.98"
@@ -19,4 +23,3 @@ futures-util = "0.3.31"
 log = "0.4.22"
 revm = { version = "27.1.0", features = ["alloydb"] }
 cacache = "13.1.0"
-

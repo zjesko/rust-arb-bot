@@ -1,7 +1,9 @@
 use alloy::{
-    primitives::{Address, Bytes, U256, U160, aliases::U24},
+    network::TransactionBuilder,
+    primitives::{Address, Bytes, U160, U256, aliases::U24},
+    rpc::types::TransactionRequest,
     sol,
-    sol_types::{SolValue, SolCall},
+    sol_types::{SolCall, SolValue},
     uint,
 };
 
@@ -30,11 +32,23 @@ sol! {
 }
 
 sol! {
-    function getAmountOut(
-        address pool,
-        bool zeroForOne,
-        uint256 amountIn
-    ) external;
+    struct QuoteExactOutputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint256 amountOut;
+        uint24 fee;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    function quoteExactOutputSingle(QuoteExactOutputSingleParams memory params)
+    public
+    override
+    returns (
+        uint256 amountIn,
+        uint160 sqrtPriceX96After,
+        uint32 initializedTicksCrossed,
+        uint256 gasEstimate
+    );
 }
 
 pub fn decode_quote_response(response: Bytes) -> Result<u128> {
@@ -42,33 +56,9 @@ pub fn decode_quote_response(response: Bytes) -> Result<u128> {
     Ok(amount_out)
 }
 
-pub fn decode_get_amount_out_response(response: Bytes) -> Result<u128> {
-    let value = response.to_vec();
-    let last_64_bytes = &value[value.len() - 64..];
-
-    let (a, b) = match <(i128, i128)>::abi_decode(last_64_bytes) {
-        Ok((a, b)) => (a, b),
-        Err(e) => return Err(anyhow::anyhow!("'getAmountOut' decode failed: {:?}", e)),
-    };
-    let value_out = std::cmp::min(a, b);
-    let value_out = -value_out;
-    Ok(value_out as u128)
-}
-
-pub fn get_amount_out_calldata(
-    pool: Address,
-    token_in: Address,
-    token_out: Address,
-    amount_in: U256,
-) -> Bytes {
-    Bytes::from(
-        getAmountOutCall {
-            pool,
-            zeroForOne: token_in < token_out,
-            amountIn: amount_in,
-        }
-        .abi_encode(),
-    )
+pub fn decode_quote_output_response(response: Bytes) -> Result<u128> {
+    let (amount_in, _, _, _) = <(u128, u128, u32, u128)>::abi_decode(&response)?;
+    Ok(amount_in)
 }
 
 pub fn quote_calldata(token_in: Address, token_out: Address, amount_in: U256, fee: u32) -> Bytes {
@@ -91,4 +81,46 @@ pub fn quote_calldata(token_in: Address, token_out: Address, amount_in: U256, fe
     };
 
     Bytes::from(quoteExactInputSingleCall { params }.abi_encode())
+}
+
+pub fn quote_exact_output_calldata(
+    token_in: Address,
+    token_out: Address,
+    amount_out: U256,
+    fee: u32,
+) -> Bytes {
+    let zero_for_one = token_in < token_out;
+
+    let sqrt_price_limit_x96: U160 = if zero_for_one {
+        "4295128749".parse().unwrap()
+    } else {
+        "1461446703485210103287273052203988822378723970341"
+            .parse()
+            .unwrap()
+    };
+
+    let params = QuoteExactOutputSingleParams {
+        tokenIn: token_in,
+        tokenOut: token_out,
+        amountOut: amount_out,
+        fee: U24::from(fee),
+        sqrtPriceLimitX96: sqrt_price_limit_x96,
+    };
+
+    Bytes::from(quoteExactOutputSingleCall { params }.abi_encode())
+}
+
+pub fn build_tx(to: Address, from: Address, calldata: Bytes, base_fee: u128) -> TransactionRequest {
+    TransactionRequest::default()
+        .to(to)
+        .from(from)
+        .with_input(calldata)
+        .nonce(0)
+        .gas_limit(1000000)
+        .max_fee_per_gas(base_fee)
+        .max_priority_fee_per_gas(0)
+        .with_chain_id(999) // Hyperliquid mainnet chain ID
+        .build_unsigned()
+        .unwrap()
+        .into()
 }

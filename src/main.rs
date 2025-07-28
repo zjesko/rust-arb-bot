@@ -1,17 +1,17 @@
 mod adapters;
 mod arbitrage;
-mod settings;
 mod helpers;
+mod settings;
 
+use alloy::providers::ProviderBuilder;
 use anyhow::Result;
 use log::{error, info};
-use tokio::sync::watch;
-use alloy::providers::ProviderBuilder;
 use std::sync::Arc;
+use tokio::sync::watch;
 
 use crate::adapters::bybit::run_bybit_listener;
 use crate::adapters::hyperswap::run_hyperswap_listener;
-use crate::arbitrage::{PriceData, ArbEngine};
+use crate::arbitrage::{ArbEngine, PriceData};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,19 +36,13 @@ async fn main() -> Result<()> {
 
     info!("initializing arbitrage detection engine...");
 
-    let mut arbitrage_engine = ArbEngine::new(
-        cfg.clone(),
-        bybit_rx,
-        hyperswap_rx,
-        provider,
-    );
+    let mut arbitrage_engine = ArbEngine::new(cfg.clone(), bybit_rx, hyperswap_rx, provider);
 
     let arbitrage_task = tokio::spawn(async move {
         if let Err(e) = arbitrage_engine.run().await {
             error!("arbitrage engine error: {}", e);
         }
     });
-
 
     tokio::select! {
         result = bybit_task => {
