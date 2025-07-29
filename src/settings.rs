@@ -15,7 +15,7 @@ pub struct Settings {
 
     pub bybit_ticker: String,
     pub gateio_ticker: String,
-    pub dex_fee_bps: u32,
+    pub dex_fee_tier: u32,
     pub cex_fee_bps: u32,
     pub dex_gas_used: u64,
 

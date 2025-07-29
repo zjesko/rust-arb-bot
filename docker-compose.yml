@@ -5,9 +5,8 @@ services:
     build: .
     container_name: rust-arb-bot
     restart: unless-stopped
-    environment:
-      - RUST_LOG=info
     volumes:
       - ./config:/app/config:ro
-    env_file:
-      - .env 
+    environment:
+      - RPC_URL=$RPC_URL
+      - RUST_LOG=info

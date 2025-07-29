@@ -16,16 +16,6 @@ pub enum ArbDirection {
     BuyCex,
     BuyDex,
 }
-#[derive(Debug, Clone)]
-pub struct ArbOpportunity {
-    pub direction: ArbDirection,
-    pub cex_price: f64,
-    pub dex_price: f64,
-    pub net_profit_bps: f64,
-    pub estimated_profit_usd: f64,
-    pub gas_cost_usd: f64,
-}
-
 pub struct ArbEngine {
     pub config: Settings,
     pub cex_rx: watch::Receiver<Option<PriceData>>,
@@ -74,22 +64,22 @@ impl ArbEngine {
 
         let gas_price_wei = self.provider.get_gas_price().await?;
 
-        if dex_price.bid > cex_price.ask {
+        // if dex_price.bid > cex_price.ask {
             self.calculate_arbitrage(
                 cex_price.ask,
                 dex_price.bid,
                 ArbDirection::BuyCex,
                 gas_price_wei,
             );
-        }
-        if cex_price.bid > dex_price.ask {
+        // }
+        // if cex_price.bid > dex_price.ask {
             self.calculate_arbitrage(
                 dex_price.ask,
                 cex_price.bid,
                 ArbDirection::BuyDex,
                 gas_price_wei,
             );
-        }
+        // }
 
         Ok(())
     }

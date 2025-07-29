@@ -17,7 +17,7 @@ quoter_custom_addr = "0x03A918028f22D9E1473B7959C927AD7425A45C7D"
 bybit_ticker = "HYPEUSDT"
 gateio_ticker = "HYPE_USDT"
 
-dex_fee_bps = 3000
+dex_fee_tier = 3000
 cex_fee_bps = 10
 
 dex_gas_used = 200000

@@ -64,15 +64,16 @@ pub async fn fetch_quote(
     price_tx: &watch::Sender<Option<PriceData>>, 
 ) -> Result<()> {
     let volume = ONE_ETHER;
-    let base_fee = provider.get_gas_price().await?;
     
     let start = Instant::now();
+
+    let base_fee = provider.get_gas_price().await?;
 
     let sell_weth_calldata = quote_calldata(
         cfg.weth_addr, 
         cfg.usdt_addr, 
         volume, 
-        cfg.dex_fee_bps
+        cfg.dex_fee_tier
     );
     let sell_response = provider.call(build_tx(
         cfg.quoter_v2_addr, 
@@ -85,7 +86,7 @@ pub async fn fetch_quote(
         cfg.usdt_addr, 
         cfg.weth_addr, 
         volume, 
-        cfg.dex_fee_bps
+        cfg.dex_fee_tier
     );
     let buy_response = provider.call(build_tx(
         cfg.quoter_v2_addr, 
@@ -126,7 +127,7 @@ pub async fn fetch_quote_revm<P: Provider + Clone>(
         cfg.weth_addr, 
         cfg.usdt_addr, 
         volume, 
-        cfg.dex_fee_bps
+        cfg.dex_fee_tier
     );
     let sell_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, sell_weth_calldata, cache_db)?;
 
@@ -134,7 +135,7 @@ pub async fn fetch_quote_revm<P: Provider + Clone>(
         cfg.usdt_addr, 
         cfg.weth_addr, 
         volume, 
-        cfg.dex_fee_bps
+        cfg.dex_fee_tier
     );
     let ask_response = revm_call(cfg.self_addr, cfg.quoter_v2_addr, buy_weth_calldata, cache_db)?;
 
