@@ -262,6 +262,8 @@ It logs all opportunities it finds:
 **Unprofitable:**
 ```
 🔴 NO ARB: buy $1.2340, sell $1.2350, net -$0.0025, cex fee: $0.0012, gas: $0.0030
+```
+---
 
 ## Extensions
 
