@@ -1,6 +1,17 @@
 # Rust Arbitrage Bot
 
+https://github.com/zjesko/rust-arb-bot
+
 A high-performance arbitrage bot written in Rust that monitors price differences between centralized exchanges (Bybit, Gate.io) and HyperSwap (DEX) on Hyperliquid network, looking for profitable arbitrage opportunities.
+
+#### Features
+- Optimised REVM simulations for lightning fast quote calls.
+- Async/Multi-threaded, uses Tokio for concurrent price monitoring
+- Realtime WebSocket for CEX prices, with heartbeat and reconnections   
+- Uses Uniswap V3 sqrtPriceLimitX96` parameters to enforce maximum slippage
+- Cached network database state (AlloyDB) with selective updates
+- Multi-stage docker build leveraging cached dependencies
+- Github Actions CI/CD to run cargo check and build docker image
 
 ### Supported Exchanges
 
@@ -12,7 +23,6 @@ A high-performance arbitrage bot written in Rust that monitors price differences
 - **HyperSwap**: Uniswap V3-style AMM on Hyperliquid network
 
 ## Project Structure
-
 ```
 rust-arb-bot/
 ├── Cargo.toml                    # Project dependencies and metadata
@@ -20,6 +30,9 @@ rust-arb-bot/
 ├── docker-compose.yml            # Docker deployment configuration
 ├── Dockerfile                    # Container build instructions
 ├── env.example                   # Environment variables template
+├── .github/                      # GitHub Actions CI/CD
+│   └── workflows/
+│       └── ci.yml                # CI pipeline configuration
 ├── config/
 │   └── default.toml              # Main configuration file
 ├── custom-quoter-contracts/      # Solidity contracts for DEX quotes
@@ -167,7 +180,6 @@ cargo run --bin dex-quotes-bench
 [2025-07-29T03:38:20Z INFO] First call: 3.932436417s
 [2025-07-29T03:38:22Z INFO] 10 calls avg: 181.886529ms
 ```
-
 ## Fee and Accounting
 
 ### 1. **DEX Fees**  
@@ -210,6 +222,8 @@ The quoter simulates the actual swap without executing it, providing accurate pr
 
 ### 3. **Gas Costs**
 
+Gas costs are calculated using live network conditions
+
 On average, transactions on HyperSwap consume around 140k gas. For example: https://hyperevmscan.io/tx/0x3d7af811cd8fdbe6d756946eccca2f3f1d6c1540321af46181f3a87e46429002
 
 We use that and multiply it with the current gas price from the provider to get real-time gas estimates based on network congestion.
@@ -220,21 +234,34 @@ let gas_cost_hype = gas_cost_wei as f64 / 1e18;
 let gas_cost_usd = gas_cost_hype * hype_price;
 ```
 
+This ensures arbitrage calculations reflect current network congestion and transaction costs.
+
 ### 4. **Net Profit Calculation**
 ```rust
 let gross_profit = sell_price - buy_price;
 let cex_fee_usd = (self.config.cex_fee_bps as f64 / 10000.0) * cex_price;
 let net_profit = gross_profit - cex_fee_usd - gas_cost_usd;
 ```
+The engine looks for two types of opportunities:
 
-## General Notes
-- Uses Uniswap V3 `sqrtPriceLimitX96` parameters to enforce maximum slippage
-- Optimised REVM simulations for reflecting actual execution conditions
-- Async/Multi-threaded, uses Tokio for concurrent price monitoring
-- Realtime WebSocket for CEX prices, with heartbeat and reconnections   
-- Cached network database state (AlloyDB) with selective updates
-- Multi-stage docker build with cached dependencies
-- Basic Github Actions CI/CD to check and build docker image.
+1. **Buy CEX → Sell DEX**: 
+   - Buy HYPE cheaper on centralized exchange
+   - Sell HYPE higher on HyperSwap DEX
+
+2. **Buy DEX → Sell CEX**:
+   - Buy HYPE cheaper on HyperSwap DEX
+   - Sell HYPE higher on centralized exchange
+
+It logs all opportunities it finds:
+
+**Profitable:**
+```
+🟢 ARB: buy $1.2340, sell $1.2580, net $0.0198, cex fee: $0.0012, gas: $0.0030
+```
+
+**Unprofitable:**
+```
+🔴 NO ARB: buy $1.2340, sell $1.2350, net -$0.0025, cex fee: $0.0012, gas: $0.0030
 
 ## Extensions
 
@@ -289,5 +316,3 @@ Execute spot as well as funding rate arbitrage within the same Hyperliquid ecosy
 4. Unwind positions when funding rates normalize
 
 This strategy capitalizes on funding rate inefficiencies while hedging directional price risk.
-
----
