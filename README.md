@@ -233,6 +233,8 @@ let net_profit = gross_profit - cex_fee_usd - gas_cost_usd;
 - Async/Multi-threaded, uses Tokio for concurrent price monitoring
 - Realtime WebSocket for CEX prices, with heartbeat and reconnections   
 - Cached network database state (AlloyDB) with selective updates
+- Multi-stage docker build with cached dependencies
+- Basic Github Actions CI/CD to check and build docker image.
 
 ## Extensions
 

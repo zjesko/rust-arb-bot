@@ -11,7 +11,6 @@ pub struct Settings {
     pub usdt_addr: Address,
     pub quoter_v2_addr: Address,
     pub pool_addr: Address,
-    pub quoter_custom_addr: Address,
 
     pub bybit_ticker: String,
     pub gateio_ticker: String,
