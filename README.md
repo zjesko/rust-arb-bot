@@ -256,12 +256,12 @@ It logs all opportunities it finds:
 
 **Profitable:**
 ```
-🟢 ARB: buy $1.2340, sell $1.2580, net $0.0198, cex fee: $0.0012, gas: $0.0030
+🟢 ARB: buy $44.9143, sell $44.9600, net $0.0040, cex fee: $0.0449, gas: $0.0048
 ```
 
 **Unprofitable:**
 ```
-🔴 NO ARB: buy $1.2340, sell $1.2350, net -$0.0025, cex fee: $0.0012, gas: $0.0030
+🔴 NO ARB: buy $44.9143, sell $44.9300, net $-0.1540, cex fee: $0.0449, gas: $0.1248
 ```
 ---
 
@@ -309,6 +309,8 @@ Support for arbitrage analysis across different volume amounts helps optimize tr
 
 ### Fast Execution with Flash Loans
 Execute arbitrage without holding any or very minimal initial capital if a flash loan provider is available on HyperEVM. Complete arbitrage in single transaction or revert entirely, ensuring atomic execution.
+
+Transactions can be sent through bundles (something like flashbots) to avoid frontrunning by MEV searchers.
 
 ### Funding Arbitrage
 Execute spot as well as funding rate arbitrage within the same Hyperliquid ecosystem. For example, if funding rates are positive (longs pay shorts), you can:
